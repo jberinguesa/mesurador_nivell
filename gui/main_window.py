@@ -39,8 +39,14 @@ class MainWindow(QMainWindow):
         # Estat de l'aplicació
         self.is_acquiring = False
         self.start_time = None
+        self.sample_count = 0  # Comptador de mostres per calcular temps exacte
         self.acquisition_timer = QTimer()
         self.acquisition_timer.timeout.connect(self.on_acquisition_tick)
+        
+        # Timer per llegir valors contínuament quan no s'està gravant
+        self.monitor_timer = QTimer()
+        self.monitor_timer.timeout.connect(self.on_monitor_tick)
+        self.monitor_timer.start(500)  # Llegir cada 500ms
         
         # Dades per a la gràfica
         self.time_data = []
@@ -52,6 +58,12 @@ class MainWindow(QMainWindow):
         
         # Comprovar disponibilitat del hardware
         self.check_hardware()
+        
+        # Activar sensors per llegir valors contínuament
+        self.setup_monitoring()
+        
+        # Fer una primera lectura després d'un petit delay per assegurar que la interfície està carregada
+        QTimer.singleShot(1000, self.on_monitor_tick)
     
     def setup_ui(self):
         """Configura la interfície gràfica."""
@@ -59,22 +71,24 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central_widget)
         
         main_layout = QHBoxLayout(central_widget)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
         
-        # Part esquerra: Gràfica (2/3)
+        # Part esquerra: Gràfica (4/5)
         left_layout = QVBoxLayout()
+        left_layout.setContentsMargins(10, 10, 10, 10)
         self.setup_plot()
         left_layout.addWidget(self.plot_widget)
         
-        # Part dreta: Controls (1/3)
-        right_layout = QVBoxLayout()
+        # Part dreta: Controls (1/5)
+        right_widget = QWidget()
+        right_widget.setStyleSheet('QWidget { background-color: #2b2b2b; }')
+        right_layout = QVBoxLayout(right_widget)
         self.setup_controls(right_layout)
         
         # Afegir layouts al principal
-        main_layout.addLayout(left_layout, 2)
-        main_layout.addLayout(right_layout, 1)
-        
-        # Footer institucional
-        self.setup_footer()
+        main_layout.addLayout(left_layout, 4)
+        main_layout.addWidget(right_widget, 1)
     
     def setup_plot(self):
         """Configura la gràfica temporal."""
@@ -97,6 +111,10 @@ class MainWindow(QMainWindow):
     
     def setup_controls(self, layout):
         """Configura els controls de la interfície."""
+        # Configurar marges del layout: 20px a cada costat
+        layout.setContentsMargins(20, 10, 20, 10)
+        layout.setSpacing(10)
+        
         # Botó Start
         self.btn_start = QPushButton('Start')
         self.btn_start.setMinimumHeight(40)
@@ -121,6 +139,15 @@ class MainWindow(QMainWindow):
         self.btn_clear.setMinimumHeight(40)
         self.btn_clear.clicked.connect(self.on_clear_clicked)
         layout.addWidget(self.btn_clear)
+        
+        # Footer institucional (just sota la zona de botons)
+        footer = QLabel(INSTITUTION_FOOTER)
+        footer.setAlignment(Qt.AlignCenter)
+        footer_font = QFont()
+        footer_font.setPointSize(16)
+        footer.setFont(footer_font)
+        footer.setStyleSheet('QLabel { color: #888; margin: 5px; }')
+        layout.addWidget(footer)
         
         # Separador
         line = QFrame()
@@ -157,18 +184,55 @@ class MainWindow(QMainWindow):
         
         # Espai flexible
         layout.addStretch()
-    
-    def setup_footer(self):
-        """Configura el footer institucional."""
-        footer = QLabel(INSTITUTION_FOOTER)
-        footer.setAlignment(Qt.AlignRight | Qt.AlignBottom)
-        footer_font = QFont()
-        footer_font.setPointSize(8)
-        footer.setFont(footer_font)
-        footer.setStyleSheet('QLabel { color: #888; margin: 5px; }')
         
-        # Afegir al layout principal
-        self.centralWidget().layout().addWidget(footer, 0, Qt.AlignRight | Qt.AlignBottom)
+        # Separador abans dels valors actuals
+        line2 = QFrame()
+        line2.setFrameShape(QFrame.HLine)
+        line2.setFrameShadow(QFrame.Sunken)
+        layout.addWidget(line2)
+        
+        # Quadres de text grans per mostrar valors actuals
+        # Sensor 1
+        sensor1_label = QLabel(f'{AI_CHANNEL_NAMES[0]}:')
+        sensor1_label.setStyleSheet('QLabel { font-size: 12px; color: #aaa; }')
+        layout.addWidget(sensor1_label)
+        
+        self.label_voltage1 = QLabel('--- V')
+        self.label_voltage1.setMinimumHeight(60)
+        self.label_voltage1.setStyleSheet(
+            'QLabel { '
+            'font-size: 24px; '
+            'font-weight: bold; '
+            'color: #4A90E2; '
+            'background-color: #1e1e1e; '
+            'border: 2px solid #4A90E2; '
+            'border-radius: 5px; '
+            'padding: 10px; '
+            '}'
+        )
+        self.label_voltage1.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.label_voltage1)
+        
+        # Sensor 2
+        sensor2_label = QLabel(f'{AI_CHANNEL_NAMES[1]}:')
+        sensor2_label.setStyleSheet('QLabel { font-size: 12px; color: #aaa; }')
+        layout.addWidget(sensor2_label)
+        
+        self.label_voltage2 = QLabel('--- V')
+        self.label_voltage2.setMinimumHeight(60)
+        self.label_voltage2.setStyleSheet(
+            'QLabel { '
+            'font-size: 24px; '
+            'font-weight: bold; '
+            'color: #E24A4A; '
+            'background-color: #1e1e1e; '
+            'border: 2px solid #E24A4A; '
+            'border-radius: 5px; '
+            'padding: 10px; '
+            '}'
+        )
+        self.label_voltage2.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.label_voltage2)
     
     def check_hardware(self):
         """Comprova si el hardware està disponible."""
@@ -179,6 +243,38 @@ class MainWindow(QMainWindow):
                 'Hardware no disponible',
                 f'{msg}\n\nVerifiqueu la connexió i la configuració a NI MAX.'
             )
+    
+    def setup_monitoring(self):
+        """Configura el sistema per llegir valors contínuament."""
+        # Configurar tasques bàsiques i activar sensors per llegir valors contínuament
+        try:
+            success, msg = self.daq.setup_tasks()
+            if success:
+                # Activar sensors per mantenir-los sempre activats quan no s'està gravant
+                self.daq.activate_sensors()
+        except Exception:
+            # Si falla, read_current_values ho intentarà de manera temporal
+            pass
+    
+    def on_monitor_tick(self):
+        """Llegeix valors actuals quan no s'està gravant."""
+        if not self.is_acquiring:
+            try:
+                success, msg, values = self.daq.read_current_values()
+                if success and values is not None:
+                    voltage1, voltage2 = values
+                    self.update_voltage_labels(voltage1, voltage2)
+                # Si falla i els sensors no estan activats, intentar activar-los
+                elif not success and "no inicialitzada" not in msg.lower():
+                    # Intentar configurar i activar sensors una vegada
+                    try:
+                        self.daq.setup_tasks()
+                        self.daq.activate_sensors()
+                    except Exception:
+                        pass
+            except Exception:
+                # Ignorar errors silenciosament per no molestar l'usuari
+                pass
     
     def on_start_clicked(self):
         """Gestiona el clic al botó Start."""
@@ -242,6 +338,7 @@ class MainWindow(QMainWindow):
         # Configurar estat
         self.is_acquiring = True
         self.start_time = datetime.now()
+        self.sample_count = 0  # Reiniciar comptador de mostres
         
         # Configurar timer (convertir període a ms)
         timer_interval = int(period * 1000)
@@ -289,6 +386,10 @@ class MainWindow(QMainWindow):
             
             self.update_plot()
             
+            # Mostrar últims valors
+            if len(self.voltage1_data) > 0 and len(self.voltage2_data) > 0:
+                self.update_voltage_labels(self.voltage1_data[-1], self.voltage2_data[-1])
+            
             self.label_status.setText(f'Carregat: {os.path.basename(filename)}')
             self.label_status.setStyleSheet('QLabel { font-weight: bold; color: blue; }')
             
@@ -319,8 +420,10 @@ class MainWindow(QMainWindow):
         try:
             voltage1, voltage2 = self.sensor_manager.process_multi_channel_data(data)
             
-            # Calcular temps
-            elapsed = (datetime.now() - self.start_time).total_seconds()
+            # Calcular temps basat en el període de mostreig i el nombre de mostres
+            # Això assegura que el temps entre mostres al fitxer sigui exactament el període
+            elapsed = self.sample_count * period
+            self.sample_count += 1
             
             # Afegir a les llistes
             self.time_data.append(elapsed)
@@ -336,6 +439,9 @@ class MainWindow(QMainWindow):
             
             # Actualitzar gràfica
             self.update_plot()
+            
+            # Actualitzar valors actuals
+            self.update_voltage_labels(voltage1, voltage2)
             
         except Exception as e:
             QMessageBox.critical(self, 'Error processant dades', str(e))
@@ -379,14 +485,25 @@ class MainWindow(QMainWindow):
         self.voltage2_data.clear()
         self.plot_line1.setData([], [])
         self.plot_line2.setData([], [])
+        # Netejar valors actuals
+        self.label_voltage1.setText('--- V')
+        self.label_voltage2.setText('--- V')
     
     def update_plot(self):
         """Actualitza la gràfica amb les dades actuals."""
         self.plot_line1.setData(self.time_data, self.voltage1_data)
         self.plot_line2.setData(self.time_data, self.voltage2_data)
     
+    def update_voltage_labels(self, voltage1: float, voltage2: float):
+        """Actualitza els labels amb els valors actuals de voltatge."""
+        self.label_voltage1.setText(f'{voltage1:.3f} V')
+        self.label_voltage2.setText(f'{voltage2:.3f} V')
+    
     def closeEvent(self, event):
         """Gestiona el tancament de la finestra."""
+        # Aturar timer de monitorització
+        self.monitor_timer.stop()
+        
         if self.is_acquiring:
             reply = QMessageBox.question(
                 self,
