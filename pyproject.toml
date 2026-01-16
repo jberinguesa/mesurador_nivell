@@ -42,4 +42,4 @@ line-length = 100
 target-version = "py38"
 
 [tool.uv]
-excliude = ["pyqt5-qt5]
+exclude = ["pyqt5-qt5"]
