@@ -75,8 +75,10 @@ class MainWindow(QMainWindow):
         main_layout.setSpacing(0)
         
         # Part esquerra: Gràfica (4/5)
-        left_layout = QVBoxLayout()
+        left_widget = QWidget()  # Widget contenidor per la gràfica
+        left_layout = QVBoxLayout(left_widget)
         left_layout.setContentsMargins(10, 10, 10, 10)
+        left_layout.setSpacing(0)
         self.setup_plot()
         left_layout.addWidget(self.plot_widget)
         
@@ -86,9 +88,9 @@ class MainWindow(QMainWindow):
         right_layout = QVBoxLayout(right_widget)
         self.setup_controls(right_layout)
         
-        # Afegir layouts al principal
-        main_layout.addLayout(left_layout, 4)
-        main_layout.addWidget(right_widget, 1)
+        # Afegir widgets al principal amb stretch factors (funciona millor a Windows)
+        main_layout.addWidget(left_widget, 4)  # 4/5 de l'espai
+        main_layout.addWidget(right_widget, 1)  # 1/5 de l'espai
     
     def setup_plot(self):
         """Configura la gràfica temporal."""
@@ -98,6 +100,11 @@ class MainWindow(QMainWindow):
         self.plot_widget.setLabel('bottom', 'Temps', units='s')
         self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
         self.plot_widget.addLegend()
+        
+        # Assegurar que el widget s'expandeix correctament (important per Windows)
+        from PyQt5.QtWidgets import QSizePolicy
+        size_policy = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.plot_widget.setSizePolicy(size_policy)
         
         # Crear línies per cada sensor
         self.plot_line1 = self.plot_widget.plot(
