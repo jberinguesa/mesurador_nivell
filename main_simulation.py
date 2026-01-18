@@ -15,7 +15,7 @@ Author: JCM Technologies, SAU
 Date: 2026
 """
 import sys
-from PyQt5.QtWidgets import QApplication, QMessageBox
+from PySide6.QtWidgets import QApplication, QMessageBox
 
 # IMPORTANT: Activar mode simulació ABANS d'importar altres mòduls
 from simulation import enable_simulation

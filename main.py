@@ -9,7 +9,7 @@ Author: JCM Technologies, SAU
 Date: 2026
 """
 import sys
-from PyQt5.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication
 from gui.main_window import MainWindow
 
 
@@ -25,7 +25,7 @@ def main():
     window.show()
     
     # Executar aplicació
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
 
 
 if __name__ == '__main__':
